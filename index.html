@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NSM Calculator</title>
+<meta name="description" content="Calculate the percentage of weekly running volume spent at work, by time or distance, using the Norwegian Singles Method.">
+<style>
+  :root {
+    --bg: #f4f5fb;
+    --bg-glow: #e3e8ff;
+    --card: #ffffff;
+    --text: #181b2c;
+    --muted: #6b7088;
+    --border: #e4e6f0;
+    --field: #f4f5fb;
+    --shadow: 0 1px 2px rgba(24, 27, 44, .04), 0 8px 24px rgba(24, 27, 44, .06);
+    --accent: #5b5bf0;
+    --c-short: #5b5bf0;
+    --c-medium: #14b8a6;
+    --c-long: #f59e0b;
+    --track: #e9ebf5;
+    --danger: #e5484d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d0f1a;
+      --bg-glow: #1a1d3d;
+      --card: #161929;
+      --text: #eceefb;
+      --muted: #8a8fab;
+      --border: #262a41;
+      --field: #0f1220;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+      --accent: #8383ff;
+      --c-short: #8383ff;
+      --c-medium: #2dd4bf;
+      --c-long: #fbbf24;
+      --track: #232740;
+      --danger: #ff6b70;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 24px 16px 32px;
+    background:
+      radial-gradient(900px 380px at 50% -120px, var(--bg-glow), transparent 70%),
+      var(--bg);
+    color: var(--text);
+    font: 16px/1.4 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1000px; margin: 0 auto; }
+
+  header { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 16px; }
+  h1 { font-size: 1.6rem; line-height: 1.15; letter-spacing: -.02em; margin: 0; }
+  .sub { color: var(--muted); margin: 0; font-size: .9rem; flex-basis: 100%; order: 3; }
+
+  /* time / distance toggle */
+  .toggle { display: inline-flex; margin-left: auto; padding: 3px; border-radius: 999px; background: var(--track); }
+  .toggle button {
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    font: inherit; font-size: .85rem; font-weight: 600;
+    padding: 5px 16px; border-radius: 999px;
+    transition: background .15s, color .15s;
+  }
+  .toggle button[aria-selected="true"] { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+  .toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* two-column layout: inputs left, result right */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  .inputs { display: grid; gap: 16px; }
+  .result-col { position: sticky; top: 16px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .section-title {
+    font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+  }
+
+  /* inputs */
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > span { font-size: .72rem; color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .input {
+    background: var(--field);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0 10px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .input:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .input input {
+    display: block; width: 100%; min-width: 0;
+    border: 0; outline: 0; background: transparent;
+    color: var(--text);
+    font: inherit; font-weight: 600; font-variant-numeric: tabular-nums;
+    padding: 8px 0;
+  }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+  /* settings: warm up/cooldown + weekly volume in one card */
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 28px; }
+  .group + .group { border-left: 1px solid var(--border); padding-left: 28px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* distance mode: weekly volume is a single field */
+  .dist .f-vol2 { display: none; }
+  .dist .f-vol1 { grid-column: span 2; }
+
+  /* protocol rows */
+  .protocols { display: grid; gap: 10px; }
+  .protocol {
+    --c: var(--accent);
+    display: grid;
+    grid-template-columns: 76px repeat(4, minmax(0, 1fr)) 58px 58px;
+    gap: 10px; align-items: end;
+    border-left: 5px solid var(--c);
+    padding: 12px 14px;
+  }
+  .pname { font-weight: 700; padding-bottom: 8px; grid-area: name; }
+  .stat { padding-bottom: 6px; min-width: 0; }
+  .stat small { display: block; font-size: .72rem; color: var(--muted); }
+  .stat b { font-size: 1.05rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stat b i { font-style: normal; font-size: .7rem; color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .f-hard { grid-area: hard; } .f-reps { grid-area: reps; } .f-rest { grid-area: rest; } .f-sess { grid-area: sess; }
+  .s-work { grid-area: work; } .s-total { grid-area: total; }
+  .protocol { grid-template-areas: "name hard reps rest sess work total"; }
+
+  /* result */
+  .result { text-align: center; padding: 18px 16px; }
+  .ring { position: relative; width: 168px; height: 168px; margin: 0 auto 10px; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 12; }
+  .ring .track { stroke: var(--track); }
+  .ring .bar { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .4s ease, stroke .2s; }
+  .ring.over .bar { stroke: var(--danger); }
+  .ring-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .pct { font-size: 2.2rem; font-weight: 800; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .pct-label { font-size: .7rem; color: var(--muted); margin-top: 5px; }
+  .detail { color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }
+  .detail b { color: var(--text); }
+  .split { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--track); margin: 14px 0 10px; }
+  .split span { display: block; height: 100%; transition: width .4s ease; }
+  .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-size: .78rem; color: var(--muted); }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  .legend b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .warn { color: var(--danger); font-size: .82rem; margin-top: 10px; }
+  .warn:empty { display: none; }
+
+  footer { color: var(--muted); font-size: .74rem; margin-top: 16px; }
+
+  /* tablet / phone: single column, result pinned at the top */
+  @media (max-width: 860px) {
+    body { padding: 12px 12px 24px; }
+    header { margin-bottom: 10px; }
+    h1 { font-size: 1.35rem; }
+    .sub { display: none; }
+    .layout { grid-template-columns: 1fr; gap: 12px; }
+    .result-col { order: -1; top: 8px; z-index: 5; }
+    .inputs { gap: 12px; }
+    .card { padding: 12px; border-radius: 16px; }
+
+    .result {
+      display: grid; grid-template-columns: 84px 1fr; gap: 0 14px; align-items: center;
+      text-align: left; padding: 10px 14px;
+    }
+    .result .section-title { display: none; }
+    .ring { width: 84px; height: 84px; margin: 0; grid-row: 1 / span 3; }
+    .ring circle { stroke-width: 14; }
+    .pct { font-size: 1.05rem; letter-spacing: -.02em; }
+    .pct-label { display: none; }
+    .detail { font-size: .8rem; }
+    .split { margin: 8px 0 6px; }
+    .legend { justify-content: flex-start; gap: 2px 10px; font-size: .72rem; }
+    .warn { grid-column: 2; margin-top: 4px; }
+
+    .settings { gap: 12px 16px; }
+    .group + .group { padding-left: 16px; }
+    .pair { gap: 8px; }
+
+    .protocol {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-areas:
+        "name name work total"
+        "hard reps rest sess";
+      gap: 6px 8px; align-items: end; padding: 10px 12px;
+    }
+    .pname, .stat { padding-bottom: 0; }
+    .stat { text-align: right; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>NSM Calculator</h1>
+    <div class="toggle" role="tablist" aria-label="Calculation mode">
+      <button type="button" role="tab" id="m-time" aria-selected="true">Time</button>
+      <button type="button" role="tab" id="m-dist" aria-selected="false">Distance</button>
+    </div>
+    <p class="sub">See what percentage of your weekly running volume is work.</p>
+  </header>
+
+  <div class="layout">
+    <div class="inputs">
+      <section class="card settings">
+        <div class="group">
+          <h2 class="section-title">Warm up &amp; cooldown</h2>
+          <div class="pair">
+            <label class="field"><span data-t="Warm up (min)" data-d="Warm up (km)">Warm up (min)</span>
+              <div class="input"><input type="number" id="warmup" min="0" step="any" inputmode="decimal"></div>
+            </label>
+            <label class="field"><span data-t="Cooldown (min)" data-d="Cooldown (km)">Cooldown (min)</span>
+              <div class="input"><input type="number" id="cooldown" min="0" step="any" inputmode="decimal"></div>
+            </label>
+          </div>
+        </div>
+        <div class="group">
+          <h2 class="section-title">Weekly volume</h2>
+          <div class="pair">
+            <label class="field f-vol1"><span data-t="Hours" data-d="Distance (km)">Hours</span>
+              <div class="input"><input type="number" id="vol1" min="0" step="any" inputmode="decimal"></div>
+            </label>
+            <label class="field f-vol2"><span>Mins</span>
+              <div class="input"><input type="number" id="vol2" min="0" step="any" inputmode="decimal"></div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <div class="protocols" id="protocols"></div>
+    </div>
+
+    <aside class="result-col">
+      <section class="card result" aria-live="polite">
+        <h2 class="section-title">Percentage of ST runs</h2>
+        <div class="ring" id="ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="track" cx="60" cy="60" r="52"></circle>
+            <circle class="bar" id="bar" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="ring-text">
+            <div class="pct" id="pct">–</div>
+            <div class="pct-label">of weekly volume</div>
+          </div>
+        </div>
+        <div class="summary">
+          <div class="detail" id="detail"></div>
+          <div class="split" id="split"></div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="warn" id="warn"></div>
+      </section>
+    </aside>
+  </div>
+
+  <footer>
+    Work = hard × reps · Total = work + rest × (reps − 1) + warm up + cooldown ·
+    Percentage = weekly work ÷ weekly volume
+  </footer>
+</main>
+
+<script>
+  const PROTOCOLS = [
+    { name: "Short",  color: "var(--c-short)" },
+    { name: "Medium", color: "var(--c-medium)" },
+    { name: "Long",   color: "var(--c-long)" },
+  ];
+
+  // Each mode keeps its own values, so toggling doesn't lose what you typed.
+  const values = {
+    time: {
+      warmup: 10, cooldown: 10, vol1: 6, vol2: 0,
+      p: [
+        { hard: 4,  reps: 8, rest: 1,   sessions: 1 },
+        { hard: 8,  reps: 5, rest: 1,   sessions: 1 },
+        { hard: 12, reps: 3, rest: 1.5, sessions: 1 },
+      ],
+    },
+    dist: {
+      warmup: 2, cooldown: 2, vol1: 60, vol2: 0,
+      p: [
+        { hard: 1, reps: 8, rest: 0.2, sessions: 1 },
+        { hard: 2, reps: 5, rest: 0.2, sessions: 1 },
+        { hard: 3, reps: 3, rest: 0.3, sessions: 1 },
+      ],
+    },
+  };
+  let mode = "time";
+
+  const $ = (id) => document.getElementById(id);
+  const num = (el) => Math.max(0, parseFloat(el.value) || 0);
+  const fmt = (n) => String(Math.round(n * 100) / 100);
+  const CIRC = 2 * Math.PI * 52;
+
+  const field = (area, key, labelT, labelD, step) => `
+    <label class="field f-${area}"><span data-t="${labelT}" data-d="${labelD}">${labelT}</span>
+      <div class="input"><input type="number" min="0" step="${step}" inputmode="decimal" data-k="${key}"></div>
+    </label>`;
+
+  $("protocols").innerHTML = PROTOCOLS.map((p) => `
+    <section class="card protocol" style="--c:${p.color}">
+      <div class="pname">${p.name}</div>
+      ${field("hard", "hard", "Hard (min)", "Hard (km)", "any")}
+      ${field("reps", "reps", "Reps", "Reps", "1")}
+      ${field("rest", "rest", "Rest (min)", "Rest (km)", "any")}
+      ${field("sess", "sessions", "Per week", "Per week", "1")}
+      <div class="stat s-work"><small>Work</small><b></b></div>
+      <div class="stat s-total"><small>Total</small><b></b></div>
+    </section>`).join("");
+
+  $("legend").innerHTML = PROTOCOLS.map((p, i) =>
+    `<span><i style="background:${p.color}"></i>${p.name} <b id="leg-${i}">0</b></span>`).join("");
+  $("split").innerHTML = PROTOCOLS.map((p, i) =>
+    `<span id="seg-${i}" style="background:${p.color};width:0"></span>`).join("");
+
+  const cards = document.querySelectorAll(".protocol");
+  const pInputs = (i) => cards[i].querySelectorAll("input");
+
+  function readInputs() {
+    return {
+      warmup: $("warmup").value, cooldown: $("cooldown").value,
+      vol1: $("vol1").value, vol2: $("vol2").value,
+      p: PROTOCOLS.map((_, i) => Object.fromEntries([...pInputs(i)].map((el) => [el.dataset.k, el.value]))),
+    };
+  }
+
+  function writeInputs(v) {
+    $("warmup").value = v.warmup; $("cooldown").value = v.cooldown;
+    $("vol1").value = v.vol1; $("vol2").value = v.vol2;
+    PROTOCOLS.forEach((_, i) => pInputs(i).forEach((el) => (el.value = v.p[i][el.dataset.k])));
+  }
+
+  function setMode(next) {
+    values[mode] = readInputs();
+    mode = next;
+    writeInputs(values[mode]);
+    document.body.classList.toggle("dist", mode === "dist");
+    $("m-time").setAttribute("aria-selected", mode === "time");
+    $("m-dist").setAttribute("aria-selected", mode === "dist");
+    document.querySelectorAll("[data-t]").forEach((el) => {
+      el.textContent = mode === "time" ? el.dataset.t : el.dataset.d;
+    });
+    calculate();
+  }
+
+  function calculate() {
+    const unit = mode === "time" ? "min" : "km";
+    const warm = num($("warmup")), cool = num($("cooldown"));
+    const weekly = [];
+
+    PROTOCOLS.forEach((_, i) => {
+      const v = {};
+      pInputs(i).forEach((inp) => (v[inp.dataset.k] = num(inp)));
+      const work = v.hard * v.reps;
+      const total = work + v.rest * Math.max(v.reps - 1, 0) + warm + cool;
+      cards[i].querySelector(".s-work b").innerHTML = `${fmt(work)}<i>${unit}</i>`;
+      cards[i].querySelector(".s-total b").innerHTML = `${fmt(total)}<i>${unit}</i>`;
+      weekly.push(work * v.sessions);
+    });
+
+    const weeklyWork = weekly.reduce((a, b) => a + b, 0);
+    const volume = mode === "time" ? num($("vol1")) * 60 + num($("vol2")) : num($("vol1"));
+    const pct = volume > 0 ? (weeklyWork / volume) * 100 : null;
+
+    $("pct").textContent = pct === null ? "–" : pct.toFixed(2) + "%";
+    $("detail").innerHTML = `<b>${fmt(weeklyWork)}</b> of <b>${fmt(volume)}</b> ${unit}`;
+
+    const shown = pct === null ? 0 : Math.min(pct, 100);
+    $("bar").style.strokeDasharray = CIRC;
+    $("bar").style.strokeDashoffset = CIRC * (1 - shown / 100);
+    $("ring").classList.toggle("over", pct !== null && pct > 100);
+
+    const denom = Math.max(volume, weeklyWork);
+    weekly.forEach((w, i) => {
+      $("seg-" + i).style.width = denom > 0 ? (w / denom) * 100 + "%" : "0";
+      $("leg-" + i).textContent = fmt(w);
+    });
+
+    $("warn").textContent = pct !== null && pct > 100
+      ? "Work exceeds weekly volume — check your inputs." : "";
+  }
+
+  $("m-time").addEventListener("click", () => mode !== "time" && setMode("time"));
+  $("m-dist").addEventListener("click", () => mode !== "dist" && setMode("dist"));
+  document.addEventListener("input", calculate);
+
+  writeInputs(values[mode]);
+  calculate();
+</script>
+</body>
+</html>
