@@ -1,5 +1,3 @@
-# nsm-calculator
-
 ## NSM Rep Calculator
 
 A single-page calculator for runners following the Norwegian Singles Method (NSM). Enter your warm up and cooldown, your short, medium and long session reps, and your weekly volume. It shows what percentage of that volume is work time.
