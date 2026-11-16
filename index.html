@@ -60,7 +60,9 @@
   .sub { color: var(--muted); margin: 0; font-size: .9rem; flex-basis: 100%; order: 3; }
 
   /* time / distance toggle */
-  .toggle { display: inline-flex; margin-left: auto; padding: 3px; border-radius: 999px; background: var(--track); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+  body:not(.dist) #unit-toggle { display: none; }
+  .toggle { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--track); }
   .toggle button {
     border: 0; background: transparent; color: var(--muted); cursor: pointer;
     font: inherit; font-size: .85rem; font-weight: 600;
@@ -207,9 +209,15 @@
 <main>
   <header>
     <h1>NSM Calculator</h1>
-    <div class="toggle" role="tablist" aria-label="Calculation mode">
-      <button type="button" role="tab" id="m-time" aria-selected="true">Time</button>
-      <button type="button" role="tab" id="m-dist" aria-selected="false">Distance</button>
+    <div class="controls">
+      <div class="toggle" id="unit-toggle" role="tablist" aria-label="Distance unit">
+        <button type="button" role="tab" id="u-km" aria-selected="true">km</button>
+        <button type="button" role="tab" id="u-mi" aria-selected="false">mi</button>
+      </div>
+      <div class="toggle" role="tablist" aria-label="Calculation mode">
+        <button type="button" role="tab" id="m-time" aria-selected="true">Time</button>
+        <button type="button" role="tab" id="m-dist" aria-selected="false">Distance</button>
+      </div>
     </div>
     <p class="sub">See what percentage of your weekly running volume is work.</p>
   </header>
@@ -300,6 +308,8 @@
     },
   };
   let mode = "time";
+  let unitDist = "km";
+  const KM_PER_MI = 1.609344;
 
   const $ = (id) => document.getElementById(id);
   const num = (el) => Math.max(0, parseFloat(el.value) || 0);
@@ -351,14 +361,36 @@
     document.body.classList.toggle("dist", mode === "dist");
     $("m-time").setAttribute("aria-selected", mode === "time");
     $("m-dist").setAttribute("aria-selected", mode === "dist");
+    updateLabels();
+    calculate();
+  }
+
+  function updateLabels() {
     document.querySelectorAll("[data-t]").forEach((el) => {
-      el.textContent = mode === "time" ? el.dataset.t : el.dataset.d;
+      el.textContent = mode === "time" ? el.dataset.t : el.dataset.d.replace("(km)", `(${unitDist})`);
     });
+  }
+
+  // Switch km <-> mi, converting the stored distance values so they stay equivalent.
+  function setUnit(next) {
+    if (next === unitDist) return;
+    const k = next === "mi" ? 1 / KM_PER_MI : KM_PER_MI;
+    const conv = (x) => fmt(num({ value: x }) * k);
+    const d = mode === "dist" ? readInputs() : values.dist;
+    values.dist = {
+      warmup: conv(d.warmup), cooldown: conv(d.cooldown), vol1: conv(d.vol1), vol2: d.vol2,
+      p: d.p.map((r) => ({ hard: conv(r.hard), reps: r.reps, rest: conv(r.rest), sessions: r.sessions })),
+    };
+    unitDist = next;
+    if (mode === "dist") writeInputs(values.dist);
+    $("u-km").setAttribute("aria-selected", unitDist === "km");
+    $("u-mi").setAttribute("aria-selected", unitDist === "mi");
+    updateLabels();
     calculate();
   }
 
   function calculate() {
-    const unit = mode === "time" ? "min" : "km";
+    const unit = mode === "time" ? "min" : unitDist;
     const warm = num($("warmup")), cool = num($("cooldown"));
     const weekly = [];
 
@@ -376,7 +408,7 @@
     const volume = mode === "time" ? num($("vol1")) * 60 + num($("vol2")) : num($("vol1"));
     const pct = volume > 0 ? (weeklyWork / volume) * 100 : null;
 
-    $("pct").textContent = pct === null ? "–" : pct.toFixed(2) + "%";
+    $("pct").textContent = pct === null ? "–" : pct.toFixed(1) + "%";
     $("detail").innerHTML = `<b>${fmt(weeklyWork)}</b> of <b>${fmt(volume)}</b> ${unit}`;
 
     const shown = pct === null ? 0 : Math.min(pct, 100);
@@ -396,6 +428,8 @@
 
   $("m-time").addEventListener("click", () => mode !== "time" && setMode("time"));
   $("m-dist").addEventListener("click", () => mode !== "dist" && setMode("dist"));
+  $("u-km").addEventListener("click", () => setUnit("km"));
+  $("u-mi").addEventListener("click", () => setUnit("mi"));
   document.addEventListener("input", calculate);
 
   writeInputs(values[mode]);
